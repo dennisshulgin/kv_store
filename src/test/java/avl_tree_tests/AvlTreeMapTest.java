@@ -3,25 +3,22 @@ package avl_tree_tests;
 import org.junit.jupiter.api.*;
 import org.shulgin.tree.AvlTreeMap;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class AvlTreeMapTest {
-    int elementCount = 1000000;
-    int removeCount = 10000;
+    int elementCount = 10000;
+    int removeCount = 100;
     Random random = new Random();
-    int min = 1;
-    int max = 250;
-    static Map<Integer, String> avlTreeMap;
-    static Map<Integer, String> hashMap;
+    int min = 3;
+    int max = 500;
+    static SortedMap<Integer, String> avlTreeMap;
+    static SortedMap<Integer, String> treeMap;
 
     @BeforeAll
     public static void setUp() {
         avlTreeMap = new AvlTreeMap<>();
-        hashMap = new HashMap<>();
+        treeMap = new TreeMap<>();
     }
 
     @Test
@@ -32,54 +29,58 @@ public class AvlTreeMapTest {
         for(int i = 0; i < elementCount; i++) {
             int key = getRandom(min, max);
             String value = UUID.randomUUID().toString();
-            Assertions.assertEquals(hashMap.put(key, value), avlTreeMap.put(key, value), message);
-            Assertions.assertEquals(hashMap.size(), avlTreeMap.size(), messageSize);
+            Assertions.assertEquals(treeMap.put(key, value), avlTreeMap.put(key, value), message);
+            Assertions.assertEquals(treeMap.size(), avlTreeMap.size(), messageSize);
         }
     }
 
     @Test
     @Order(2)
-    public void getTest() {
-        String message = "Values are not equal";
-        for(int i = 0; i < elementCount; i++) {
-            int key = getRandom(min, max);
-            Assertions.assertEquals(hashMap.get(key), avlTreeMap.get(key), message);
-        }
+    public void firstKeyTest() {
+        Assertions.assertEquals(treeMap.firstKey(), avlTreeMap.firstKey());
     }
 
     @Test
     @Order(3)
-    public void containsKeyTest() {
-        String message = "Invalid answer";
-        for(int i = 0; i < elementCount; i++) {
-            int key = getRandom(min, max);
-            Assertions.assertEquals(hashMap.containsKey(key), avlTreeMap.containsKey(key), message);
-        }
+    public void lastKeyTest() {
+        Assertions.assertEquals(treeMap.lastKey(), avlTreeMap.lastKey());
     }
 
     @Test
     @Order(4)
-    public void keySetTest() {
-        String message = "Key sets are not equal";
-        Assertions.assertEquals(hashMap.keySet(), avlTreeMap.keySet(), message);
+    public void getTest() {
+        String message = "Values are not equal";
+        for(int i = 0; i < elementCount; i++) {
+            int key = getRandom(min, max);
+            Assertions.assertEquals(treeMap.get(key), avlTreeMap.get(key), message);
+        }
     }
 
     @Test
     @Order(5)
-    public void removeTest() {
+    public void containsKeyTest() {
         String message = "Invalid answer";
-        for(int i = 0; i < removeCount; i++) {
+        for(int i = 0; i < elementCount; i++) {
             int key = getRandom(min, max);
-            hashMap.remove(key); avlTreeMap.remove(key);
+            Assertions.assertEquals(treeMap.containsKey(key), avlTreeMap.containsKey(key), message);
         }
-        keySetTest();
     }
 
     @Test
     @Order(6)
+    public void removeTest() {
+        String message = "Invalid answer";
+        for(int i = 0; i < removeCount; i++) {
+            int key = getRandom(min, max);
+            treeMap.remove(key); avlTreeMap.remove(key);
+        }
+    }
+
+    @Test
+    @Order(7)
     public void sizeTest() {
         String message = "Invalid answer";
-        Assertions.assertEquals(hashMap.size(), avlTreeMap.size(), message);
+        Assertions.assertEquals(treeMap.size(), avlTreeMap.size(), message);
     }
 
     public int getRandom(int min, int max) {

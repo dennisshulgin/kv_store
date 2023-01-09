@@ -2,84 +2,108 @@ package org.shulgin.tree;
 
 import java.util.*;
 
-public class AvlTreeMap <K,V> implements Map<K,V> {
+/**
+ *
+ * Класс AvlTreeMap реализует интерфейс SortedMap. Сруктура данных построена на АВЛ дереве,
+ * которое балансируется при добавлениии и удалении элементов.
+ * @author Denis Shulgin
+ * @param <K> параметр ключа
+ * @param <V> параметр значения
+ */
+public class AvlTreeMap <K,V> implements SortedMap<K,V> {
 
     private Node<K,V> root;
     private Comparator<? super K> comparator;
+
     private int size = 0;
 
+    /**
+     * Конструктор без параметров
+     */
     public AvlTreeMap() {
     }
 
+    /**
+     * Конструктор принимает на вход Comparator
+     * @param comparator - способ сравнения элементов
+     */
     public AvlTreeMap(Comparator<? super K> comparator) {
         this.comparator = comparator;
     }
-    public void print(Node<K,V> node, int level, String side) {
-        if(node == null)
-            return;
-        System.out.println("key:" + node.key + " (" + level + ") " + side);
-        System.out.println("parent:" + (node.parent == null ? "null" : node.parent.key));
-        print(node.left, level + 1, "left");
-        print(node.right, level + 1, "right");
-    }
 
-    public void print() {
-        print(root, 0, "root");
-        System.out.println();
-    }
-
+    /**
+     * Метод возвращает количество элементов в дереве
+     * @return количество элементов в дереве
+     */
     @Override
     public int size() {
         return size;
     }
 
+    /**
+     * Метод проверяет наличие элементов в дереве
+     * @return true, если дерево пустое, иначе false
+     */
     @Override
     public boolean isEmpty() {
         return size == 0;
     }
 
+    /**
+     * Метод проверяет содержание жлемента в дереве
+     * @param o ключ
+     * @return true или false, в зависимости от наличия элемента
+     */
     @Override
     public boolean containsKey(Object o) {
-        if(o == null || root == null || root.getKey().getClass() != o.getClass()) {
+        if (o == null || root == null || root.getKey().getClass() != o.getClass()) {
             return false;
         }
         K key = (K) o;
-        Node<K,V> node = findNodeByKey(key);
+        Node<K, V> node = findNodeByKey(key);
         return node != null;
     }
 
-    @Override
-    public boolean containsValue(Object o) {
-        throw new UnsupportedOperationException();
-    }
-
+    /**
+     * Метод возвращает значение по ключу
+     * @param o ключ
+     * @return значение
+     */
     @Override
     public V get(Object o) {
-        if(o == null || root == null || root.getKey().getClass() != o.getClass()) {
+        if (o == null || root == null || root.getKey().getClass() != o.getClass()) {
             return null;
         }
         K key = (K) o;
-        Node<K,V> node = findNodeByKey(key);
+        Node<K, V> node = findNodeByKey(key);
         return node != null ? node.getValue() : null;
     }
 
+    /**
+     * Метод добавляет пару ключ-значение в дерево
+     * @param k ключ
+     * @param v значение
+     * @return стврое значение ключа или null, если такого ключа не было
+     */
     @Override
     public V put(K k, V v) {
+        if(k == null || v == null) {
+            return null;
+        }
         Node<K,V> node = new Node<>(k, v);
-
-        if(root == null) {
+        if (root == null) {
             root = node;
             size++;
             return null;
         }
 
         boolean isInserted = false;
-        Node<K,V> head = root;
+        Node<K, V> head = root;
 
         do {
             int cmp = compare(node.getKey(), head.getKey());
-            if(cmp > 0) {
-                if(head.right == null) {
+            if (cmp > 0) {
+                if (head.right == null) {
                     head.right = node;
                     node.parent = head;
                     isInserted = true;
@@ -87,8 +111,8 @@ public class AvlTreeMap <K,V> implements Map<K,V> {
                 } else {
                     head = head.right;
                 }
-            } else if(cmp < 0) {
-                if(head.left == null) {
+            } else if (cmp < 0) {
+                if (head.left == null) {
                     head.left = node;
                     node.parent = head;
                     isInserted = true;
@@ -99,26 +123,148 @@ public class AvlTreeMap <K,V> implements Map<K,V> {
             } else {
                 return head.setValue(node.getValue());
             }
-        } while(!isInserted);
+        } while (!isInserted);
 
         upBalance(node);
         return null;
     }
 
+    /**
+     * Метод удаляет элемент из дерева
+     * @param o ключ
+     * @return значение удаляемого ключа
+     */
     @Override
     public V remove(Object o) {
-        if(o == null || root == null || root.getKey().getClass() != o.getClass()) {
+        if (o == null || root == null || root.getKey().getClass() != o.getClass()) {
             return null;
         }
         K key = (K) o;
-        Node<K,V> node = findNodeByKey(key);
+        Node<K, V> node = findNodeByKey(key);
         V oldValue = null;
-        if(node != null) {
+        if (node != null) {
+            size = size > 0 ? size - 1 : 0;
             oldValue = node.getValue();
-            size--;
+            removeNode(node);
         }
-        removeNode(node);
         return oldValue;
+    }
+
+    /**
+     * Метод добавляет все значения из коллекции Map в дерево.
+     * @param map коллекция
+     */
+    @Override
+    public void putAll(Map<? extends K, ? extends V> map) {
+        for (Map.Entry<? extends K,? extends V> entry : map.entrySet()) {
+            put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * Метод очищает дерево
+     */
+    @Override
+    public void clear() {
+        root = null;
+        size = 0;
+    }
+
+    /**
+     * Возвращает Comparator дерева
+     * @return comparator
+     */
+    @Override
+    public Comparator<? super K> comparator() {
+        return comparator;
+    }
+
+    /**
+     * Метод возвращает ключ минимального элемента
+     * @return ключ минимального элемента
+     */
+    @Override
+    public K firstKey() {
+        Node<K, V> firstNode = mostLeftNode(root);
+        return firstNode == null ? null : firstNode.getKey();
+    }
+
+    /**
+     * Метод возвращает ключ максимального элемента
+     * @return ключ максимального элемента
+     */
+    @Override
+    public K lastKey() {
+        Node<K, V> lastNode = mostRightNode(root);
+        return lastNode == null ? null : lastNode.getKey();
+    }
+
+    /**
+     * Метод не реализован
+     * @param o ключ
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public boolean containsValue(Object o) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Метод не реализован
+     * @param k ключ
+     * @param k1 ключ
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public SortedMap<K, V> subMap(K k, K k1) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Метод не реализован
+     * @param k ключ
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public SortedMap<K, V> headMap(K k) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Метод не реализован
+     * @param k ключ
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public SortedMap<K, V> tailMap(K k) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Метод не реализован
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public Set<K> keySet() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Метод не реализован
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public Collection<V> values() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Метод не реализован
+     * @return UnsupportedOperationException
+     */
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+        throw new UnsupportedOperationException();
     }
 
     private void removeNode(Node<K,V> node) {
@@ -175,51 +321,6 @@ public class AvlTreeMap <K,V> implements Map<K,V> {
         }
     }
 
-    @Override
-    public void putAll(Map<? extends K, ? extends V> map) {
-        for (Map.Entry<? extends K,? extends V> entry : map.entrySet()) {
-            put(entry.getKey(), entry.getValue());
-        }
-    }
-
-    @Override
-    public void clear() {
-        root = null;
-    }
-
-    @Override
-    public Set<K> keySet() {
-        if(root == null) {
-            return Set.of();
-        }
-        Set<K> set = new HashSet<>();
-        Queue<Node<K,V>> queue = new ArrayDeque<>();
-        queue.add(root);
-
-        while(!queue.isEmpty()) {
-            int qSize = queue.size();
-            while(qSize-- > 0) {
-                Node<K,V> current = queue.poll();
-                set.add(current.getKey());
-                if(current.left != null)
-                    queue.add(current.left);
-                if(current.right != null)
-                    queue.add(current.right);
-            }
-        }
-
-        return set;
-    }
-
-    @Override
-    public Collection<V> values() {
-        return null;
-    }
-
-    @Override
-    public Set<Entry<K, V>> entrySet() {
-        return null;
-    }
 
     private Node<K,V> findNodeByKey(K key) {
         if(root == null) {
@@ -251,6 +352,13 @@ public class AvlTreeMap <K,V> implements Map<K,V> {
     private Node<K,V> mostLeftNode(Node<K,V> node) {
         while(node.left != null) {
             node = node.left;
+        }
+        return node;
+    }
+
+    private Node<K,V> mostRightNode(Node<K,V> node) {
+        while(node.right != null) {
+            node = node.right;
         }
         return node;
     }
