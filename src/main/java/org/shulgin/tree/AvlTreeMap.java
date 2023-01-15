@@ -1,5 +1,7 @@
 package org.shulgin.tree;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.util.*;
 
 /**
@@ -10,8 +12,10 @@ import java.util.*;
  * @param <K> параметр ключа
  * @param <V> параметр значения
  */
-public class AvlTreeMap <K,V> implements SortedMap<K,V> {
+public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
 
+    @Serial
+    private static final long serialVersionUID = 1L;
     private Node<K,V> root;
     private Comparator<? super K> comparator;
 
