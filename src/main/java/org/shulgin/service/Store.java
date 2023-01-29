@@ -1,62 +1,108 @@
 package org.shulgin.service;
 
-import org.shulgin.tree.AvlTreeMap;
+import org.shulgin.exception.CreateDirectoryException;
+import org.shulgin.exception.CreateFileException;
+import org.shulgin.tree.IMemTable;
+import org.shulgin.tree.MemTable;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.nio.file.Files;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 
 public class Store <K,V>{
-    private SortedMap<K,V> memTable;
-    private int memTableSize;
-
-    private String pathToSaveData;
-
-    private BlockingQueue<SortedMap<K,V>> blockingMemTablesQueue;
-
+    private IMemTable<K,V> memTable;
+    private final int memTableSize;
+    private final String pathToSaveData;
+    private final String defaultFileName;
+    private final BlockingQueue<IMemTable<K,V>> blockingMemTablesQueue;
     private final Object lock = new Object();
 
-    public Store(int memTableSize, String pathToSaveData) {
-        this.memTable = new AvlTreeMap<>();
+    private final List<File> files;
+
+    public Store(int memTableSize, String pathToSaveData, String defaultFileName) throws CreateDirectoryException{
+        this.memTable = new MemTable<>();
         this.memTableSize = memTableSize;
         this.pathToSaveData = pathToSaveData;
+        this.defaultFileName = defaultFileName;
         this.blockingMemTablesQueue = new ArrayBlockingQueue<>(100);
-        SaveMemTableThread saveMemTableThread = new SaveMemTableThread(blockingMemTablesQueue, pathToSaveData);
-        //saveMemTableThread.setDaemon(true);
-        saveMemTableThread.start();
+        this.files = getKeyValueStoreFiles(new File(pathToSaveData));
+
+        WriteMemTableThread writeMemTableThread;
+        try {
+            writeMemTableThread = new WriteMemTableThread(blockingMemTablesQueue, files, pathToSaveData, defaultFileName);
+            writeMemTableThread.start();
+        } catch (Exception ignored) { }
     }
 
     public void put(K key, V value) {
         synchronized (lock) {
             memTable.put(key, value);
             if(memTable.size() == memTableSize) {
-                SortedMap<K,V> fullMemTable = memTable;
-                memTable = new AvlTreeMap<>();
+                IMemTable<K,V> fullMemTable = memTable;
+                memTable = new MemTable<>();
                 try {
                     blockingMemTablesQueue.put(fullMemTable);
-                } catch (InterruptedException ignored) {
-                    ignored.printStackTrace();
-                }
+                } catch (InterruptedException ignored) { }
             }
         }
     }
 
-    private class SaveMemTableThread extends Thread {
+    public V get(K key) {
+        synchronized (lock) {
+            V value = memTable.get(key);
+            if(value != null) {
+                return value;
+            }
+            return null;
+        }
+    }
 
-        private final BlockingQueue<SortedMap<K,V>> blockingMemTablesQueue;
+    private List<File> getKeyValueStoreFiles(File directory) throws CreateDirectoryException{
+        List<File> files = new CopyOnWriteArrayList<>();
+
+        if(!directory.exists()) {
+            if(!directory.mkdir()) {
+                throw new CreateDirectoryException();
+            }
+        }
+
+        String regex = defaultFileName + "\\d*";
+
+        for(File file : Objects.requireNonNull(directory.listFiles())) {
+            if(file.isFile() && Pattern.matches(regex, file.getName())) {
+                files.add(file);
+            }
+        }
+        files.sort((first, second) -> {
+            String filenameFirst = first.getName();
+            String filenameSecond = second.getName();
+            int indexFirst = Integer.parseInt(filenameFirst.substring(defaultFileName.length()));
+            int indexSecond = Integer.parseInt(filenameSecond.substring(defaultFileName.length()));
+            return Integer.compare(indexFirst, indexSecond);
+        });
+
+        return files;
+    }
+
+    private class WriteMemTableThread extends Thread {
+        private final BlockingQueue<IMemTable<K,V>> blockingMemTablesQueue;
         private final String pathToSaveFiles;
+        private final String defaultFileName;
+        private final List<File> files;
 
-        private final String defaultFileName = "file";
-        private int maxFileNumber;
-
-        public SaveMemTableThread(BlockingQueue<SortedMap<K,V>> blockingMemTableQueue, String pathToSaveFiles) {
+        public WriteMemTableThread(BlockingQueue<IMemTable<K,V>> blockingMemTableQueue,
+                                   List<File> files, String pathToSaveFiles,
+                                   String defaultFileName) throws CreateDirectoryException{
             this.blockingMemTablesQueue = blockingMemTableQueue;
             this.pathToSaveFiles = pathToSaveFiles;
-            scanDirectory(pathToSaveFiles);
+            this.defaultFileName = defaultFileName;
+            this.files = files;
         }
 
         @Override
@@ -65,46 +111,35 @@ public class Store <K,V>{
                 while(!Thread.currentThread().isInterrupted()) {
                     exportMemTableToFile(blockingMemTablesQueue.take());
                 }
-            } catch (InterruptedException ignored) {
-                ignored.printStackTrace();
-            }
+            } catch (Exception ignored) { }
         }
 
-        private void exportMemTableToFile(SortedMap<K,V> table) {
-            K minKey = table.firstKey();
-            K maxKey = table.lastKey();
-            System.out.println("hello");
+        private int getIndexFile(File file) {
+            return Integer.parseInt(file.getName().substring(0, defaultFileName.length()));
         }
 
-        private void scanDirectory(String path) {
-            List<File> files = getTableFilesFromDirectory(path);
-            files.sort((f1, f2) -> {
-                String name1 = f1.getName();
-                String name2 = f2.getName();
-                int index1 = Integer.parseInt(name1.substring(defaultFileName.length()));
-                int index2 = Integer.parseInt(name2.substring(defaultFileName.length()));
-                return Integer.compare(index1, index2);
-            });
-            if(!files.isEmpty()) {
-                maxFileNumber = Integer.parseInt(files.get(files.size() - 1).getName()
-                        .substring(defaultFileName.length()));
-            }
-            System.out.println(maxFileNumber);
-        }
+        private void exportMemTableToFile(IMemTable<K,V> table) throws CreateDirectoryException, CreateFileException, IOException{
+            File file = new File(pathToSaveFiles);
 
-        private List<File> getTableFilesFromDirectory(String path) {
-            List<File> files = new ArrayList<>();
-            String regex = defaultFileName + "\\d*";
-            File directory = new File(path, "");
-            if(!directory.exists()) {
-                directory.mkdir();
+            if(!file.exists() || file.isFile()) {
+                throw new CreateDirectoryException();
             }
-            for(File file : Objects.requireNonNull(directory.listFiles())) {
-                if(file.isFile() && Pattern.matches(regex, file.getName())) {
-                    files.add(file);
-                }
+            int indexNewFile = getIndexFile(files.get(files.size() - 1)) + 1;
+
+            String nameNewFile = defaultFileName + indexNewFile;
+            File newFile = new File(file.getAbsolutePath() + "/" + nameNewFile);
+
+            if(newFile.exists() || !newFile.createNewFile()) {
+                throw new CreateFileException();
             }
-            return files;
+            try(FileOutputStream fos = new FileOutputStream(newFile);
+                ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+                K firstKey = table.firstKey();
+                K lastKey = table.lastKey();
+                oos.writeObject(firstKey);
+                oos.writeObject(lastKey);
+                oos.writeObject(table);
+            }
         }
     }
 }

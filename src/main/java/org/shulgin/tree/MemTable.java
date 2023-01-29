@@ -1,18 +1,9 @@
 package org.shulgin.tree;
 
-import java.io.Serial;
-import java.io.Serializable;
+import java.io.*;
 import java.util.*;
 
-/**
- *
- * Класс AvlTreeMap реализует интерфейс SortedMap. Сруктура данных построена на АВЛ дереве,
- * которое балансируется при добавлениии и удалении элементов.
- * @author Denis Shulgin
- * @param <K> параметр ключа
- * @param <V> параметр значения
- */
-public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
+public class MemTable<K,V> implements IMemTable<K,V>, Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -21,43 +12,30 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
 
     private int size = 0;
 
-    /**
-     * Конструктор без параметров
-     */
-    public AvlTreeMap() {
+    private int hiddenSize = 0;
+
+    public MemTable() {
     }
 
-    /**
-     * Конструктор принимает на вход Comparator
-     * @param comparator - способ сравнения элементов
-     */
-    public AvlTreeMap(Comparator<? super K> comparator) {
+    public MemTable(Comparator<? super K> comparator) {
         this.comparator = comparator;
     }
 
-    /**
-     * Метод возвращает количество элементов в дереве
-     * @return количество элементов в дереве
-     */
     @Override
     public int size() {
         return size;
     }
 
-    /**
-     * Метод проверяет наличие элементов в дереве
-     * @return true, если дерево пустое, иначе false
-     */
+    @Override
+    public int hiddenSize() {
+        return hiddenSize;
+    }
+
     @Override
     public boolean isEmpty() {
         return size == 0;
     }
 
-    /**
-     * Метод проверяет содержание жлемента в дереве
-     * @param o ключ
-     * @return true или false, в зависимости от наличия элемента
-     */
     @Override
     public boolean containsKey(Object o) {
         if (o == null || root == null || root.getKey().getClass() != o.getClass()) {
@@ -68,11 +46,6 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         return node != null;
     }
 
-    /**
-     * Метод возвращает значение по ключу
-     * @param o ключ
-     * @return значение
-     */
     @Override
     public V get(Object o) {
         if (o == null || root == null || root.getKey().getClass() != o.getClass()) {
@@ -80,15 +53,9 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         }
         K key = (K) o;
         Node<K, V> node = findNodeByKey(key);
-        return node != null ? node.getValue() : null;
+        return node != null && !node.isDeleted ? node.getValue() : null;
     }
 
-    /**
-     * Метод добавляет пару ключ-значение в дерево
-     * @param k ключ
-     * @param v значение
-     * @return стврое значение ключа или null, если такого ключа не было
-     */
     @Override
     public V put(K k, V v) {
         if(k == null || v == null) {
@@ -98,6 +65,7 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         if (root == null) {
             root = node;
             size++;
+            hiddenSize++;
             return null;
         }
 
@@ -112,6 +80,7 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
                     node.parent = head;
                     isInserted = true;
                     size++;
+                    hiddenSize++;
                 } else {
                     head = head.right;
                 }
@@ -121,10 +90,15 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
                     node.parent = head;
                     isInserted = true;
                     size++;
+                    hiddenSize++;
                 } else {
                     head = head.left;
                 }
             } else {
+                if(head.isDeleted) {
+                    size++;
+                }
+                head.isDeleted = false;
                 return head.setValue(node.getValue());
             }
         } while (!isInserted);
@@ -133,14 +107,26 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         return null;
     }
 
-    /**
-     * Метод удаляет элемент из дерева
-     * @param o ключ
-     * @return значение удаляемого ключа
-     */
     @Override
     public V remove(Object o) {
-        if (o == null || root == null || root.getKey().getClass() != o.getClass()) {
+        if (isIncorrectKey(o)) {
+            return null;
+        }
+        K key = (K) o;
+        Node<K, V> node = findNodeByKey(key);
+        V oldValue = null;
+        if (node != null) {
+            size = size > 0 ? size - 1 : 0;
+            hiddenSize = hiddenSize > 0 ? hiddenSize - 1 : 0;
+            oldValue = node.getValue();
+            removeNode(node);
+        }
+        return oldValue;
+    }
+
+    @Override
+    public V markAsDeleted(Object o) {
+        if (isIncorrectKey(o)) {
             return null;
         }
         K key = (K) o;
@@ -149,126 +135,60 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         if (node != null) {
             size = size > 0 ? size - 1 : 0;
             oldValue = node.getValue();
-            removeNode(node);
+            node.isDeleted = true;
         }
         return oldValue;
     }
 
-    /**
-     * Метод добавляет все значения из коллекции Map в дерево.
-     * @param map коллекция
-     */
-    @Override
-    public void putAll(Map<? extends K, ? extends V> map) {
-        for (Map.Entry<? extends K,? extends V> entry : map.entrySet()) {
-            put(entry.getKey(), entry.getValue());
-        }
-    }
-
-    /**
-     * Метод очищает дерево
-     */
     @Override
     public void clear() {
         root = null;
         size = 0;
+        hiddenSize = 0;
     }
 
-    /**
-     * Возвращает Comparator дерева
-     * @return comparator
-     */
-    @Override
-    public Comparator<? super K> comparator() {
-        return comparator;
-    }
-
-    /**
-     * Метод возвращает ключ минимального элемента
-     * @return ключ минимального элемента
-     */
     @Override
     public K firstKey() {
         Node<K, V> firstNode = mostLeftNode(root);
         return firstNode == null ? null : firstNode.getKey();
     }
 
-    /**
-     * Метод возвращает ключ максимального элемента
-     * @return ключ максимального элемента
-     */
     @Override
     public K lastKey() {
         Node<K, V> lastNode = mostRightNode(root);
         return lastNode == null ? null : lastNode.getKey();
     }
 
-    /**
-     * Метод не реализован
-     * @param o ключ
-     * @return UnsupportedOperationException
-     */
     @Override
-    public boolean containsValue(Object o) {
-        throw new UnsupportedOperationException();
+    public void printTree(PrintWriter pw) {
+        int level = 0;
+
+        Queue<Node<K,V>> queue = new ArrayDeque<>();
+
+        if(root != null) {
+            queue.add(root);
+        }
+
+        while(!queue.isEmpty()) {
+            int size = queue.size();
+
+            while(size-- > 0) {
+                Node<K,V> node = queue.poll();
+                pw.println("level:" + level + " key:" + node.key + " value:" + node.value);
+                if(node.left != null) {
+                    queue.add(node.left);
+                }
+                if(node.right != null) {
+                    queue.add(node.right);
+                }
+            }
+
+            level++;
+        }
     }
 
-    /**
-     * Метод не реализован
-     * @param k ключ
-     * @param k1 ключ
-     * @return UnsupportedOperationException
-     */
-    @Override
-    public SortedMap<K, V> subMap(K k, K k1) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Метод не реализован
-     * @param k ключ
-     * @return UnsupportedOperationException
-     */
-    @Override
-    public SortedMap<K, V> headMap(K k) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Метод не реализован
-     * @param k ключ
-     * @return UnsupportedOperationException
-     */
-    @Override
-    public SortedMap<K, V> tailMap(K k) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Метод не реализован
-     * @return UnsupportedOperationException
-     */
-    @Override
-    public Set<K> keySet() {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Метод не реализован
-     * @return UnsupportedOperationException
-     */
-    @Override
-    public Collection<V> values() {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Метод не реализован
-     * @return UnsupportedOperationException
-     */
-    @Override
-    public Set<Entry<K, V>> entrySet() {
-        throw new UnsupportedOperationException();
+    private boolean isIncorrectKey(Object o) {
+        return (o == null || root == null || root.getKey().getClass() != o.getClass());
     }
 
     private void removeNode(Node<K,V> node) {
@@ -321,10 +241,10 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         } else {
             Node<K,V> mostLeftNode = mostLeftNode(node.right);
             node.key = mostLeftNode.getKey();
+            node.value = mostLeftNode.getValue();
             removeNode(mostLeftNode);
         }
     }
-
 
     private Node<K,V> findNodeByKey(K key) {
         if(root == null) {
@@ -460,10 +380,11 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
         return rightRotate(a);
     }
 
-    private static class Node<K,V> implements Map.Entry<K,V> {
+    private static class Node<K,V>{
         K key;
         V value;
         int height;
+        boolean isDeleted;
         Node<K,V> left;
         Node<K,V> right;
         Node<K,V> parent;
@@ -473,17 +394,12 @@ public class AvlTreeMap <K,V> implements SortedMap<K,V> , Serializable {
             this.value = value;
         }
 
-        @Override
         public K getKey() {
             return key;
         }
-
-        @Override
         public V getValue() {
             return value;
         }
-
-        @Override
         public V setValue(V v) {
             V oldValue = value;
             value = v;

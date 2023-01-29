@@ -1,0 +1,11 @@
+10
+1 String1
+2 String2
+3 String3
+5 String5
+4 String4
+-4 String-4
+5 String55
+7 String7
+8 String8
+0 String0
