@@ -10,6 +10,7 @@ import java.io.*;
 public class MemTableTest {
     String putPath = "src/test/resources/put_test_files";
     String removePath = "src/test/resources/remove_test_files";
+    String delPath = "src/test/resources/del_test_files";
     static IMemTable<Integer, String> memTable;
 
     @BeforeAll
@@ -63,6 +64,34 @@ public class MemTableTest {
         Assertions.assertTrue(compareFiles(outputFile, resultFile), "Деревья не равны!");
         System.out.println(memTable.size());
         System.out.println(memTable.hiddenSize());
+    }
+
+    @Order(3)
+    @Test
+    public void markAsDeletedTest() throws Exception{
+        File inputFile = new File(delPath + "/input.txt");
+        File outputFile = new File(delPath + "/output.txt");
+        File resultFile = new File(delPath + "/result.txt");
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(inputFile)));
+        int n = Integer.parseInt(reader.readLine());
+
+        while(n-- > 0) {
+            int key = Integer.parseInt(reader.readLine());
+            memTable.markAsDeleted(key);
+        }
+
+        PrintWriter writer = new PrintWriter(new OutputStreamWriter(new FileOutputStream(resultFile)));
+        memTable.printTree(writer);
+        reader.close();
+        writer.close();
+        Assertions.assertTrue(compareFiles(outputFile, resultFile), "Деревья не равны!");
+    }
+
+    @Order(4)
+    @Test
+    public void sizeTest() {
+        System.out.println(memTable.size() + " " + memTable.hiddenSize());
     }
 
     private boolean compareFiles(File file1, File file2) throws Exception{

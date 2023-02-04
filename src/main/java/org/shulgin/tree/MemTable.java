@@ -160,6 +160,11 @@ public class MemTable<K,V> implements IMemTable<K,V>, Serializable {
     }
 
     @Override
+    public Comparator<? super K> comparator() {
+        return comparator;
+    }
+
+    @Override
     public void printTree(PrintWriter pw) {
         int level = 0;
 
@@ -174,7 +179,7 @@ public class MemTable<K,V> implements IMemTable<K,V>, Serializable {
 
             while(size-- > 0) {
                 Node<K,V> node = queue.poll();
-                pw.println("level:" + level + " key:" + node.key + " value:" + node.value);
+                pw.println("level:" + level + " key:" + node.key + " value:" + node.value + " isDeleted:" + node.isDeleted);
                 if(node.left != null) {
                     queue.add(node.left);
                 }

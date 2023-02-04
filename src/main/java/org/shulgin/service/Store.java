@@ -5,10 +5,7 @@ import org.shulgin.exception.CreateFileException;
 import org.shulgin.tree.IMemTable;
 import org.shulgin.tree.MemTable;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -59,6 +56,24 @@ public class Store <K,V>{
             if(value != null) {
                 return value;
             }
+            for(int i = files.size() - 1; i >= 0; i--) {
+                try(FileInputStream fis = new FileInputStream(files.get(i));
+                    ObjectInputStream ois = new ObjectInputStream(fis)) {
+                    K firstKey = (K)ois.readObject();
+                    K lastKey = (K)ois.readObject();
+                    Comparator<? super K> comparator = memTable.comparator();
+                    if(comparator.compare(key, firstKey) >= 0
+                            && comparator.compare(key, lastKey) <= -1) {
+                        IMemTable<K,V> currMemTable = (IMemTable<K, V>) ois.readObject();
+                        V val = currMemTable.get(key);
+
+                        if(val != null) {
+                            return val;
+                        }
+                    }
+                } catch (IOException | ClassNotFoundException ignored) { }
+            }
+
             return null;
         }
     }
@@ -124,7 +139,7 @@ public class Store <K,V>{
             if(!file.exists() || file.isFile()) {
                 throw new CreateDirectoryException();
             }
-            int indexNewFile = getIndexFile(files.get(files.size() - 1)) + 1;
+            int indexNewFile = files.size() > 0 ? getIndexFile(files.get(files.size() - 1)) + 1 : 0;
 
             String nameNewFile = defaultFileName + indexNewFile;
             File newFile = new File(file.getAbsolutePath() + "/" + nameNewFile);

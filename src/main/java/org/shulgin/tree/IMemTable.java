@@ -2,6 +2,7 @@ package org.shulgin.tree;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.util.Comparator;
 
 public interface IMemTable<K,V> {
     int size();
@@ -16,4 +17,5 @@ public interface IMemTable<K,V> {
     K lastKey();
     void printTree(PrintWriter pw);
     void clear();
+    Comparator<? super K> comparator();
 }

@@ -1,5 +1,5 @@
-level:0 key:2 value:String2 isDeleted:false
-level:1 key:1 value:String1 isDeleted:false
+level:0 key:2 value:String2 isDeleted:true
+level:1 key:1 value:String1 isDeleted:true
 level:1 key:5 value:String55 isDeleted:false
 level:2 key:-4 value:String-4 isDeleted:false
 level:2 key:3 value:String3 isDeleted:false
